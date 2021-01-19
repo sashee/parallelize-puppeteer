@@ -3,6 +3,9 @@ const getPort = require("get-port");
 const util = require("util");
 const puppeteer = require("puppeteer");
 const bluebird = require("bluebird");
+const rxjs = require("rxjs");
+const {mergeMap, toArray} = require("rxjs/operators");
+const {orderedMergeMap} = require("./orderedmergemap.js");
 
 const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 
@@ -152,6 +155,50 @@ const withWebServer = async (fn) => {
 					return result;
 				}).then((r) => ({result: r}), (e) => ({error: e}));
 			}, {concurrency: 3});
+		});
+		console.log(results);
+	});
+
+	// rxjs mergemap
+	console.log("\nRxJS mergeMap");
+	await withWebServer(async (host) => {
+		const urls = ["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+		const results = await withBrowser(async (browser) => {
+			return rxjs.from(urls).pipe(
+				mergeMap(async (url) => {
+					return withPage(browser)(async (page) => {
+						console.log(`Scraping ${url}`);
+						await page.goto(`${host}/${url}`);
+
+						const result = await page.evaluate(e => e.textContent, await page.$("#result"));
+						console.log(`Scraping ${url} finished`);
+						return result;
+					});
+				}, 3),
+				toArray(),
+			).toPromise();
+		});
+		console.log(results);
+	});
+
+	// rxjs orderedMergeMap
+	console.log("\nRxJS orderedMergeMap");
+	await withWebServer(async (host) => {
+		const urls = ["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+		const results = await withBrowser(async (browser) => {
+			return rxjs.from(urls).pipe(
+				orderedMergeMap(async (url) => {
+					return withPage(browser)(async (page) => {
+						console.log(`Scraping ${url}`);
+						await page.goto(`${host}/${url}`);
+
+						const result = await page.evaluate(e => e.textContent, await page.$("#result"));
+						console.log(`Scraping ${url} finished`);
+						return result;
+					});
+				}, 3),
+				toArray(),
+			).toPromise();
 		});
 		console.log(results);
 	});
