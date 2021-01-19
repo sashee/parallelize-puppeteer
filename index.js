@@ -12,10 +12,15 @@ const withWebServer = async (fn) => {
 	const app = http.createServer(async (req, res) => {
 		await wait(Math.random() * 100);
 		const url = req.url;
-		const html = `<html><body><div id="result">Result for: ${url}</div></body></html>`;
-		res.setHeader("Content-Type", "text/html");
-		res.writeHead(200);
-		res.end(html);
+		if (url.endsWith("/403")) {
+			res.writeHead(403);
+			res.end();
+		} else {
+			const html = `<html><body><div id="result">Result for: ${url}</div></body></html>`;
+			res.setHeader("Content-Type", "text/html");
+			res.writeHead(200);
+			res.end(html);
+		}
 	});
 
 	try {
@@ -127,6 +132,25 @@ const withWebServer = async (fn) => {
 					console.log(`Scraping ${url} finished`);
 					return result;
 				});
+			}, {concurrency: 3});
+		});
+		console.log(results);
+	});
+
+	// error handling
+	console.log("\nError handling");
+	await withWebServer(async (host) => {
+		const urls = ["a", "b/403", "c/403", "d", "e", "f"];
+		const results = await withBrowser(async (browser) => {
+			return bluebird.map(urls, async (url) => {
+				return withPage(browser)(async (page) => {
+					console.log(`Scraping ${url}`);
+					await page.goto(`${host}/${url}`);
+
+					const result = await page.evaluate(e => e.textContent, await page.$("#result"));
+					console.log(`Scraping ${url} finished`);
+					return result;
+				}).then((r) => ({result: r}), (e) => ({error: e}));
 			}, {concurrency: 3});
 		});
 		console.log(results);
